@@ -1,6 +1,6 @@
 # ================================================================
-# STOCK PRICE PREDICTION APP
-# Author: Krishna Kumar Jha | IILM University
+# STOCK PRICE PREDICTION APP - FIXED VERSION
+# Author: Krishna Jha | IILM University
 # ================================================================
 
 import streamlit as st
@@ -91,17 +91,20 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
     with tab1:
         st.header(f"{selected_stock} Overview")
         
-        # Metrics
-        current_price = df['Close'].iloc[-1]
-        prev_price = df['Close'].iloc[-2]
+        # Metrics - FIXED: Convert to float
+        current_price = float(df['Close'].iloc[-1])
+        prev_price = float(df['Close'].iloc[-2])
         change = current_price - prev_price
         change_pct = (change / prev_price) * 100
+        high_price = float(df['High'].max())
+        low_price = float(df['Low'].min())
+        avg_volume = float(df['Volume'].mean())
         
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Current Price", f"{currency}{current_price:,.2f}", f"{change_pct:+.2f}%")
-        col2.metric("Period High", f"{currency}{df['High'].max():,.2f}")
-        col3.metric("Period Low", f"{currency}{df['Low'].min():,.2f}")
-        col4.metric("Avg Volume", f"{df['Volume'].mean():,.0f}")
+        col2.metric("Period High", f"{currency}{high_price:,.2f}")
+        col3.metric("Period Low", f"{currency}{low_price:,.2f}")
+        col4.metric("Avg Volume", f"{avg_volume:,.0f}")
         
         # Price chart
         st.subheader("Price History")
@@ -157,7 +160,7 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         plt.tight_layout()
         st.pyplot(fig)
         
-        current_rsi = df['RSI'].iloc[-1]
+        current_rsi = float(df['RSI'].iloc[-1])
         if current_rsi > 70:
             st.warning(f"⚠️ RSI = {current_rsi:.1f} - OVERBOUGHT")
         elif current_rsi < 30:
@@ -208,10 +211,10 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
             # Predict
             y_pred = model.predict(X_test_scaled)
             
-            # Metrics
-            mae = mean_absolute_error(y_test, y_pred)
-            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-            r2 = r2_score(y_test, y_pred)
+            # Metrics - FIXED: Convert to float
+            mae = float(mean_absolute_error(y_test, y_pred))
+            rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
+            r2 = float(r2_score(y_test, y_pred))
         
         # Show metrics
         st.subheader("Model Performance")
@@ -225,21 +228,21 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         
         last_features = X.iloc[-1:].values
         last_scaled = scaler.transform(last_features)
-        predicted_price = model.predict(last_scaled)[0]
+        predicted_price = float(model.predict(last_scaled)[0])
         
-        current = data['Close'].iloc[-1]
-        change = ((predicted_price - current) / current) * 100
+        current = float(data['Close'].iloc[-1])
+        pred_change = ((predicted_price - current) / current) * 100
         
         col1, col2, col3 = st.columns(3)
         col1.metric("Today's Close", f"{currency}{current:,.2f}")
-        col2.metric("Predicted Tomorrow", f"{currency}{predicted_price:,.2f}", f"{change:+.2f}%")
+        col2.metric("Predicted Tomorrow", f"{currency}{predicted_price:,.2f}", f"{pred_change:+.2f}%")
         col3.metric("Confidence", f"{r2*100:.1f}%")
         
         # Recommendation
         st.subheader("💡 Recommendation")
-        if change > 1 and current_rsi < 70:
+        if pred_change > 1 and current_rsi < 70:
             st.success("### 📈 BULLISH - Price may go UP")
-        elif change < -1 and current_rsi > 30:
+        elif pred_change < -1 and current_rsi > 30:
             st.error("### 📉 BEARISH - Price may go DOWN")
         else:
             st.info("### ➡️ NEUTRAL - Hold position")
