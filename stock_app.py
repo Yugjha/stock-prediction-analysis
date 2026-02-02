@@ -1,5 +1,5 @@
 # ================================================================
-# STOCK PRICE PREDICTION APP - FIXED VERSION
+# STOCK PRICE PREDICTION APP - FULLY FIXED VERSION
 # Author: Krishna Jha | IILM University
 # ================================================================
 
@@ -74,6 +74,10 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         try:
             df = yf.download(ticker, start=start_date, end=end_date, progress=False)
             
+            # IMPORTANT FIX: Flatten columns if MultiIndex
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            
             if len(df) < 50:
                 st.error("Not enough data. Please select a longer date range.")
                 st.stop()
@@ -91,7 +95,7 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
     with tab1:
         st.header(f"{selected_stock} Overview")
         
-        # Metrics - FIXED: Convert to float
+        # Get values as floats
         current_price = float(df['Close'].iloc[-1])
         prev_price = float(df['Close'].iloc[-2])
         change = current_price - prev_price
@@ -106,15 +110,20 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         col3.metric("Period Low", f"{currency}{low_price:,.2f}")
         col4.metric("Avg Volume", f"{avg_volume:,.0f}")
         
-        # Price chart
+        # Price chart - FIXED: Convert to numpy array
         st.subheader("Price History")
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df.index, df['Close'], linewidth=1.5, color='#1E88E5')
-        ax.fill_between(df.index, df['Close'], alpha=0.3)
+        
+        dates = df.index.to_numpy()
+        close_prices = df['Close'].values.flatten()
+        
+        ax.plot(dates, close_prices, linewidth=1.5, color='#1E88E5')
+        ax.fill_between(dates, close_prices, alpha=0.3, color='#1E88E5')
         ax.set_xlabel('Date')
         ax.set_ylabel(f'Price ({currency})')
         ax.set_title(f'{selected_stock} Stock Price')
         ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
         
@@ -137,26 +146,34 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         rs = gain / loss
         df['RSI'] = 100 - (100 / (1 + rs))
         
-        # Moving average chart
+        # Moving average chart - FIXED
         st.subheader("Moving Averages")
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(df.index[-100:], df['Close'].tail(100), label='Close', linewidth=1.5)
-        ax.plot(df.index[-100:], df['MA_20'].tail(100), label='MA 20', linestyle='--')
-        ax.plot(df.index[-100:], df['MA_50'].tail(100), label='MA 50', linestyle='--')
+        
+        last_100 = df.tail(100)
+        dates_100 = last_100.index.to_numpy()
+        
+        ax.plot(dates_100, last_100['Close'].values.flatten(), label='Close', linewidth=1.5)
+        ax.plot(dates_100, last_100['MA_20'].values.flatten(), label='MA 20', linestyle='--')
+        ax.plot(dates_100, last_100['MA_50'].values.flatten(), label='MA 50', linestyle='--')
         ax.legend()
         ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
         
-        # RSI chart
+        # RSI chart - FIXED
         st.subheader("RSI Indicator")
         fig, ax = plt.subplots(figsize=(12, 4))
-        ax.plot(df.index[-100:], df['RSI'].tail(100), color='purple', linewidth=1.5)
+        
+        rsi_values = last_100['RSI'].values.flatten()
+        ax.plot(dates_100, rsi_values, color='purple', linewidth=1.5)
         ax.axhline(y=70, color='red', linestyle='--', alpha=0.7)
         ax.axhline(y=30, color='green', linestyle='--', alpha=0.7)
-        ax.fill_between(df.index[-100:], 30, 70, alpha=0.1, color='gray')
+        ax.fill_between(dates_100, 30, 70, alpha=0.1, color='gray')
         ax.set_ylim(0, 100)
         ax.grid(True, alpha=0.3)
+        plt.xticks(rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
         
@@ -194,10 +211,13 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
             X = data[features]
             y = data['Target']
             
+            # Flatten y if needed
+            y_values = y.values.flatten()
+            
             # Split
             split = int(len(X) * 0.8)
             X_train, X_test = X[:split], X[split:]
-            y_train, y_test = y[:split], y[split:]
+            y_train, y_test = y_values[:split], y_values[split:]
             
             # Scale
             scaler = StandardScaler()
@@ -205,13 +225,13 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
             X_test_scaled = scaler.transform(X_test)
             
             # Train
-            model = RandomForestRegressor(n_estimators=100, random_state=42)
+            model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
             model.fit(X_train_scaled, y_train)
             
             # Predict
             y_pred = model.predict(X_test_scaled)
             
-            # Metrics - FIXED: Convert to float
+            # Metrics
             mae = float(mean_absolute_error(y_test, y_pred))
             rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
             r2 = float(r2_score(y_test, y_pred))
@@ -222,6 +242,9 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         col1.metric("R² Score", f"{r2:.4f}")
         col2.metric("MAE", f"{currency}{mae:.2f}")
         col3.metric("RMSE", f"{currency}{rmse:.2f}")
+        
+        # Accuracy bar
+        st.progress(min(r2, 1.0), text=f"Model Accuracy: {r2*100:.1f}%")
         
         # Tomorrow prediction
         st.subheader("🔮 Tomorrow's Prediction")
@@ -247,12 +270,14 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         else:
             st.info("### ➡️ NEUTRAL - Hold position")
         
-        # Actual vs Predicted chart
+        # Actual vs Predicted chart - FIXED
         st.subheader("Actual vs Predicted")
         fig, ax = plt.subplots(figsize=(12, 5))
-        ax.plot(range(len(y_test)), y_test.values, label='Actual', linewidth=2)
+        ax.plot(range(len(y_test)), y_test, label='Actual', linewidth=2)
         ax.plot(range(len(y_pred)), y_pred, label='Predicted', linewidth=2, alpha=0.8)
         ax.legend()
+        ax.set_xlabel('Days')
+        ax.set_ylabel(f'Price ({currency})')
         ax.grid(True, alpha=0.3)
         plt.tight_layout()
         st.pyplot(fig)
@@ -267,6 +292,7 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.barh(importance_df['Feature'], importance_df['Importance'], color='steelblue')
         ax.set_xlabel('Importance')
+        ax.set_title('Top Features for Prediction')
         plt.tight_layout()
         st.pyplot(fig)
     
@@ -277,19 +303,25 @@ if st.sidebar.button("🚀 Analyze & Predict", type="primary"):
 else:
     st.info("👈 Select a stock and click **'Analyze & Predict'** to start!")
     
-    st.markdown("""
-    ### How to Use:
-    1. Select Indian or US market
-    2. Choose a stock
-    3. Set date range
-    4. Click 'Analyze & Predict'
+    col1, col2 = st.columns(2)
     
-    ### Features:
-    - 📊 Price visualization
-    - 📈 Technical indicators (RSI, Moving Averages)
-    - 🤖 ML-based price prediction
-    - 🎯 Feature importance analysis
-    """)
+    with col1:
+        st.markdown("""
+        ### 📌 How to Use
+        1. Select **Indian** or **US** market
+        2. Choose a **stock** from dropdown
+        3. Set **date range**
+        4. Click **'Analyze & Predict'**
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### 🛠️ Features
+        - 📊 Price visualization
+        - 📈 Technical indicators (RSI, MA)
+        - 🤖 ML-based price prediction
+        - 🎯 Feature importance analysis
+        """)
 
 # Footer
 st.markdown("---")
